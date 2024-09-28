@@ -21,6 +21,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 
 // Initialize Supabase client
 const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -81,6 +83,15 @@ export default function InferencePage() {
   const [selectedResultModel, setSelectedResultModel] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(0);
+  const { toast } = useToast();
+
+  // Create a function to show toast notifications
+  const showToast = (message: string, type: "default" | "success" | "error" = "default") => {
+    toast({
+      description: message,
+      variant: type === "error" ? "destructive" : "default",
+    })
+  };
 
   // Fetch models from Supabase
   const fetchModels = async () => {
@@ -188,7 +199,7 @@ export default function InferencePage() {
 
   const runInference = async () => {
     if (selectedModels.length === 0 || !selectedImage) {
-      showAlert("Please select at least one model and an image.", 3000);
+      showToast("Please select at least one model and an image.", "error");
       return;
     }
 
@@ -237,10 +248,10 @@ export default function InferencePage() {
       // Show a summary of the inference results
       const successCount = processedResults.filter(r => !r.error).length;
       const errorCount = processedResults.length - successCount;
-      showAlert(`Inference completed. ${successCount} model(s) succeeded, ${errorCount} failed.`, 3000);
+      showToast(`Inference completed. ${successCount} model(s) succeeded, ${errorCount} failed.`, "success");
     } catch (error) {
       console.error('Inference error:', error);
-      showAlert('Error occurred during inference.', 3000);
+      showToast('Error occurred during inference.', "error");
     } finally {
       setIsRunningInference(false);
     }
@@ -269,13 +280,13 @@ export default function InferencePage() {
 
   const handleSaveResult = async () => {
     if (!selectedImage || !selectedResultModel) {
-      showAlert("Please select an image and a model result to save.", 3000);
+      showToast("Please select an image and a model result to save.", "error");
       return;
     }
 
     const currentResult = getCurrentModelResult();
     if (!currentResult) {
-      showAlert("No result found for the selected model.", 3000);
+      showToast("No result found for the selected model.", "error");
       return;
     }
 
@@ -337,7 +348,7 @@ export default function InferencePage() {
       const { error: saveError } = await saveOperation;
       if (saveError) throw saveError;
 
-      showAlert('Result saved successfully!', 2000);
+      showToast('Result saved successfully!', "success");
       setInferenceResults(prevResults =>
         prevResults.map(result =>
           result.model_name === selectedResultModel
@@ -347,7 +358,7 @@ export default function InferencePage() {
       );
     } catch (error) {
       console.error('Error saving result:', error);
-      showAlert('Failed to save result. Please try again.', 2000);
+      showToast('Failed to save result. Please try again.', "error");
     }
   };
 
@@ -445,13 +456,6 @@ export default function InferencePage() {
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }
-  };
-
-  const showAlert = (message: string, timeout: number) => {
-    setAlertState({ isOpen: true, message });
-    setTimeout(() => {
-      setAlertState({ isOpen: false, message: '' });
-    }, timeout);
   };
 
   const handleModelSelection = (modelName: string) => {
@@ -699,7 +703,7 @@ export default function InferencePage() {
           {/* Right Column */}
           <div className={`${isSidebarOpen ? 'w-1/4' : 'w-1/4'} p-6 border-l border-gray-200`}>
             {/* Inference Results */}
-            <h2 className="text-2xl font-bold mb-4">Inference Results</h2>
+            <h2 className="text-xl font-bold mb-4">Inference Results</h2>
             <div className="bg-white rounded mb-6 relative">
               <ScrollArea className="h-[50vh] pr-2">
                 {isRunningInference ? (
@@ -728,7 +732,7 @@ export default function InferencePage() {
             {selectedResultModel && (
               <div className="mb-4">
                 <h3 className="text-lg font-semibold mb-2">
-                  Rate the Result: {selectedResultModel}
+                  Rating: {selectedResultModel}
                 </h3>
                 <div className="flex mb-2">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -772,15 +776,6 @@ export default function InferencePage() {
           compact={true}
         />
 
-        <AlertDialog open={alertState.isOpen} onOpenChange={(isOpen) => setAlertState(prev => ({ ...prev, isOpen }))}>
-          <AlertDialogContent>
-            <AlertDialogTitle>Info</AlertDialogTitle>
-            <AlertDialogDescription>
-              {alertState.message}
-            </AlertDialogDescription>
-          </AlertDialogContent>
-        </AlertDialog>
-
         <AlertDialog 
           open={saveConfirmState.isOpen} 
           onOpenChange={(isOpen) => setSaveConfirmState(prev => ({ ...prev, isOpen }))}
@@ -804,6 +799,8 @@ export default function InferencePage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Toaster />
       </div>
     </div>
   );
