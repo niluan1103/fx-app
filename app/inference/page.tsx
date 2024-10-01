@@ -29,6 +29,11 @@ const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// API Endpoint
+//const API_ENDPOINT = 'https://5c22e1a5-2b9c-4ad8-bc43-4356427e40b8-00-1f0rg8937q931.sisko.replit.dev';  
+// const API_ENDPOINT = 'http://localhost:8000';
+const API_ENDPOINT = 'https://polished-seriously-tortoise.ngrok-free.app'; // ngrok tunnel to local API
+
 interface Model {
   id: number;
   model_name: string;
@@ -209,7 +214,7 @@ export default function InferencePage() {
     setHasInferenceRun(false);
 
     try {
-      const response = await fetch('http://localhost:8000/run_inference', {
+      const response = await fetch(`${API_ENDPOINT}/run_inference`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
