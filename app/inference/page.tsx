@@ -31,8 +31,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // API Endpoint
 //const API_ENDPOINT = 'https://5c22e1a5-2b9c-4ad8-bc43-4356427e40b8-00-1f0rg8937q931.sisko.replit.dev';  
-// const API_ENDPOINT = 'http://localhost:8000';
-const API_ENDPOINT = 'https://polished-seriously-tortoise.ngrok-free.app'; // ngrok tunnel to local API
+//const API_ENDPOINT = 'http://localhost:8000';
+// const API_ENDPOINT = 'https://polished-seriously-tortoise.ngrok-free.app'; // ngrok tunnel to local API
+const API_ENDPOINT = 'https://api.ltlab.site'; //Cloudflare tunnel to local API
 
 interface Model {
   id: number;
@@ -510,28 +511,27 @@ export default function InferencePage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-800">
-      {/* Sidebar */}
-      <Sidebar 
+    <div className="flex flex-col h-screen bg-gray-50 text-gray-800">
+      {/* Header */}
+      <Header 
+        username={username}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        currentPage="Inference"
+        onSignOut={handleSignOut}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <Header 
-          username={username}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <Sidebar 
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onSignOut={handleSignOut}
+          currentPage="Inference"
         />
 
-        {/* Inference Content */}
-        <main className={`flex-1 overflow-hidden bg-white flex transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'}`}>
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto bg-white flex flex-col lg:flex-row pb-16 lg:pb-0">
           {/* Left Column */}
-          <div className={`${isSidebarOpen ? 'w-1/4' : 'w-1/4'} p-6 border-r border-gray-200`}>
+          <div className="w-full lg:w-1/4 p-4 lg:p-6 border-b lg:border-r border-gray-200">
             {/* Model Selection */}
             <h2 className="text-xl font-bold mb-4">Model Selection</h2>
             
@@ -542,7 +542,7 @@ export default function InferencePage() {
                   <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80">
+              <PopoverContent className="w-full lg:w-80">
                 <ScrollArea className="h-[300px] pr-4">
                   <div className="space-y-4">
                     <div className="flex items-center space-x-2">
@@ -622,7 +622,7 @@ export default function InferencePage() {
           </div>
 
           {/* Middle Column - Image Display */}
-          <div className={`${isSidebarOpen ? 'w-1/2' : 'w-1/2'} p-6 flex flex-col`}>
+          <div className="w-full lg:w-1/2 p-4 lg:p-6 flex flex-col">
             <h2 className="text-xl font-bold mb-4">
               {inferenceResults.length > 0 ? "Model Result Images" : "Selected Image"}
             </h2>
@@ -637,7 +637,7 @@ export default function InferencePage() {
                     <TabsTrigger 
                       key={index} 
                       value={result.model_name}
-                      className="flex-grow basis-1/4 max-w-[25%]"
+                      className="flex-grow basis-1/2 lg:basis-1/4 max-w-[50%] lg:max-w-[25%]"
                     >
                       {result.model_name}
                     </TabsTrigger>
@@ -706,7 +706,7 @@ export default function InferencePage() {
           </div>
 
           {/* Right Column */}
-          <div className={`${isSidebarOpen ? 'w-1/4' : 'w-1/4'} p-6 border-l border-gray-200`}>
+          <div className="w-full lg:w-1/4 p-4 lg:p-6 border-t lg:border-l border-gray-200">
             {/* Inference Results */}
             <h2 className="text-xl font-bold mb-4">Inference Results</h2>
             <div className="bg-white rounded mb-6 relative">
@@ -759,7 +759,7 @@ export default function InferencePage() {
               </div>
             )}
 
-            <div className="flex space-x-2 mt-4">
+            <div className="flex space-x-2 mt-4 mb-4 lg:mb-0">
               <Button 
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" 
                 onClick={handleSaveResult} 
@@ -772,41 +772,41 @@ export default function InferencePage() {
             </div>
           </div>
         </main>
-
-        {/* ImageGridModal */}
-        <ImageGridModal
-          isOpen={isImageGridModalOpen}
-          onClose={() => setIsImageGridModalOpen(false)}
-          onImageSelect={handleImageSelect}
-          compact={true}
-        />
-
-        <AlertDialog 
-          open={saveConfirmState.isOpen} 
-          onOpenChange={(isOpen) => setSaveConfirmState(prev => ({ ...prev, isOpen }))}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Save Current Result?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Do you want to save the current inference result before selecting a new image?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => proceedWithImageSelection(saveConfirmState.pendingImage!)}>
-                Don't Save
-              </AlertDialogCancel>
-              <AlertDialogAction onClick={() => {
-                setSaveConfirmState({ isOpen: false, pendingImage: null });
-              }}>
-                Save
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <Toaster />
       </div>
+
+      {/* ImageGridModal */}
+      <ImageGridModal
+        isOpen={isImageGridModalOpen}
+        onClose={() => setIsImageGridModalOpen(false)}
+        onImageSelect={handleImageSelect}
+        compact={true}
+      />
+
+      <AlertDialog 
+        open={saveConfirmState.isOpen} 
+        onOpenChange={(isOpen) => setSaveConfirmState(prev => ({ ...prev, isOpen }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save Current Result?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Do you want to save the current inference result before selecting a new image?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => proceedWithImageSelection(saveConfirmState.pendingImage!)}>
+              Don't Save
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setSaveConfirmState({ isOpen: false, pendingImage: null });
+            }}>
+              Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Toaster />
     </div>
   );
 }
