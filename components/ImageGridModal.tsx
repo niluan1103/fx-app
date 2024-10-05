@@ -35,9 +35,11 @@ export function ImageGridModal({
       .from('images')
       .select(`
         id, 
-        imgur_url, 
+        gdrive_url, 
         created_at, 
-        filename, 
+        modified_at,
+        file_name, 
+        gdrive_id,
         description,
         datasets (id, dataset_name)
       `)
@@ -48,9 +50,11 @@ export function ImageGridModal({
     } else {
       const processedImages: Image[] = data.map(item => ({
         id: item.id,
-        imgur_url: item.imgur_url,
+        gdrive_url: item.gdrive_url,
         created_at: item.created_at,
-        filename: item.filename,
+        modified_at: item.modified_at,
+        file_name: item.file_name,
+        gdrive_id: item.gdrive_id,
         description: item.description,
         dataset_id: item.datasets ? item.datasets.id : null,
         dataset_name: item.datasets ? item.datasets.dataset_name : null

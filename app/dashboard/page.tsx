@@ -15,9 +15,11 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Image {
   id: number;
-  imgur_url: string;
+  gdrive_url: string;
   created_at: string;
-  filename: string;
+  modified_at: string;
+  file_name: string;
+  gdrive_id: string;
   description: string | null;
   dataset_name: string | null;
   dataset_id: number | null;
@@ -48,12 +50,14 @@ export default function Component() {
       .from('images')
       .select(`
         id, 
-        imgur_url, 
+        gdrive_url, 
         created_at, 
-        filename, 
+        modified_at,
+        file_name, 
+        gdrive_id,
         description,
         datasets (id, dataset_name)
-        `)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -61,9 +65,11 @@ export default function Component() {
     } else {
       const processedImages: Image[] = data.map(item => ({
         id: item.id,
-        imgur_url: item.imgur_url,
+        gdrive_url: item.gdrive_url,
         created_at: item.created_at,
-        filename: item.filename,
+        modified_at: item.modified_at,
+        file_name: item.file_name,
+        gdrive_id: item.gdrive_id,
         description: item.description,
         dataset_name: item.datasets ? item.datasets.dataset_name : null,
         dataset_id: item.datasets ? item.datasets.id : null

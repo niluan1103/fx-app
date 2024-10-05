@@ -8,9 +8,11 @@ import { Grid, List, Search, ChevronLeft, ChevronRight } from "lucide-react";
 // Export the Image interface
 export interface Image {
   id: number;
-  imgur_url: string;
+  gdrive_url: string;
   created_at: string;
-  filename: string;
+  modified_at: string;
+  file_name: string;
+  gdrive_id: string;
   description: string | null;
   dataset_name: string | null;
   dataset_id: number | null;
@@ -67,10 +69,10 @@ export function ImageGrid({
         sortedImages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         break;
       case 'filename':
-        sortedImages.sort((a, b) => a.filename.localeCompare(b.filename));
+        sortedImages.sort((a, b) => a.file_name.localeCompare(b.file_name));
         break;
       case 'updated':
-        sortedImages.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        sortedImages.sort((a, b) => new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime());
         break;
     }
     setFilteredImages(sortedImages);
@@ -81,7 +83,7 @@ export function ImageGrid({
       setFilteredImages(images);
     } else {
       const filtered = images.filter(image => 
-        image.filename.toLowerCase().includes(searchTerm.toLowerCase())
+        image.file_name.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredImages(filtered);
     }
@@ -206,7 +208,7 @@ export function ImageGrid({
                     object-cover
                     ${viewMode === 'grid' ? `w-full ${imageHeight}` : 'w-20 h-20 mr-4'}
                   `}
-                  src={image.imgur_url}
+                  src={image.gdrive_url}
                   style={{
                     aspectRatio: viewMode === 'grid' ? "1/1" : "auto",
                     objectFit: "cover",
@@ -221,11 +223,11 @@ export function ImageGrid({
                   absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-2 py-1
                   ${viewMode === 'grid' ? 'truncate' : ''}
                 `}>
-                  {image.filename}
+                  {image.file_name}
                 </div>
                 {viewMode === 'list' && (
                   <div className="flex-1">
-                    <p className="font-semibold">{image.filename}</p>
+                    <p className="font-semibold">{image.file_name}</p>
                     <p className="text-sm text-gray-500">{new Date(image.created_at).toLocaleString()}</p>
                     {image.dataset_name && (
                       <p className="text-xs text-indigo-600 mt-1">{image.dataset_name}</p>

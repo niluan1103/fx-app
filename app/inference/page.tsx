@@ -20,7 +20,7 @@ import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Star } from "lucide-react";
+import { Star, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -43,11 +43,14 @@ interface Model {
 
 interface Image {
   id: number;
-  imgur_url: string;
+  gdrive_url: string;
   created_at: string;
-  filename: string;
+  modified_at: string;
+  file_name: string;
+  gdrive_id: string;
   description: string | null;
   dataset_name: string | null;
+  dataset_id: number | null;
 }
 
 // Add this new interface for model results including error state
@@ -138,7 +141,7 @@ export default function InferencePage() {
       // Fetch images at those indices
       const { data, error } = await supabase
         .from('images')
-        .select('id, imgur_url, created_at, filename, description, datasets (dataset_name)')
+        .select('id, gdrive_url, created_at, modified_at, file_name, gdrive_id, description, datasets (dataset_name, id)')
         .in('id', randomIndices)
         .limit(6);
 
@@ -146,11 +149,14 @@ export default function InferencePage() {
 
       const processedImages: Image[] = data.map(item => ({
         id: item.id,
-        imgur_url: item.imgur_url,
-        created_at: item.created_at || null,
-        filename: item.filename,
+        gdrive_url: item.gdrive_url,
+        created_at: item.created_at,
+        modified_at: item.modified_at,
+        file_name: item.file_name,
+        gdrive_id: item.gdrive_id,
         description: item.description || null,
-        dataset_name: item.datasets && item.datasets[0] ? item.datasets[0].dataset_name : null
+        dataset_name: item.datasets && item.datasets ? item.datasets.dataset_name : null,
+        dataset_id: item.datasets && item.datasets ? item.datasets.id : null
       }));
 
       setRandomImages(processedImages);
@@ -222,7 +228,7 @@ export default function InferencePage() {
         },
         body: JSON.stringify({
           model_names: selectedModels,
-          imageUrl: selectedImage.imgur_url,
+          imageUrl: selectedImage.gdrive_url,
           confidenceThreshold: confidenceThreshold / 100, // Convert to 0-1 range
         }),
       });
@@ -584,8 +590,8 @@ export default function InferencePage() {
               {randomImages.map((image) => (
                 <img
                   key={image.id}
-                  src={image.imgur_url}
-                  alt={image.filename}
+                  src={image.gdrive_url}
+                  alt={image.file_name}
                   className="w-full h-24 object-cover rounded cursor-pointer"
                   onClick={() => handleImageSelection(image)}
                 />
@@ -649,7 +655,7 @@ export default function InferencePage() {
                       <Card className="w-full">
                         <CardHeader>
                           <CardTitle className="text-lg font-bold text-center">
-                            {selectedImage ? selectedImage.filename : 'No image selected'}
+                            {selectedImage ? selectedImage.file_name : 'No image selected'}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="flex flex-col items-center">
@@ -682,14 +688,14 @@ export default function InferencePage() {
               <Card className="w-full">
                 <CardHeader>
                   <CardTitle className="text-lg font-bold text-center">
-                    {selectedImage ? selectedImage.filename : 'No image selected'}
+                    {selectedImage ? selectedImage.file_name : 'No image selected'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center">
                   {selectedImage ? (
                     <img
-                      src={selectedImage.imgur_url}
-                      alt={selectedImage.filename}
+                      src={selectedImage.gdrive_url}
+                      alt={selectedImage.file_name}
                       className="max-w-full max-h-[50vh] object-contain mb-4"
                     />
                   ) : (
@@ -712,7 +718,10 @@ export default function InferencePage() {
             <div className="bg-white rounded mb-6 relative">
               <ScrollArea className="h-[50vh] pr-2">
                 {isRunningInference ? (
-                  <p className="p-3 text-base">Running inference...</p>
+                  <div className="p-3 flex items-center">
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    <p className="text-base">Running inference...</p>
+                  </div>
                 ) : inferenceResults.length > 0 ? (
                   displayInferenceResult()
                 ) : (
