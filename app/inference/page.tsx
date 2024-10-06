@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Upload } from "lucide-react";
 import { createClient } from '@supabase/supabase-js';
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
@@ -23,6 +23,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Star, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Initialize Supabase client
 const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -31,9 +39,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // API Endpoint
 //const API_ENDPOINT = 'https://5c22e1a5-2b9c-4ad8-bc43-4356427e40b8-00-1f0rg8937q931.sisko.replit.dev';  
-//const API_ENDPOINT = 'http://localhost:8000';
+const API_ENDPOINT = 'http://localhost:8000';
 // const API_ENDPOINT = 'https://polished-seriously-tortoise.ngrok-free.app'; // ngrok tunnel to local API
-const API_ENDPOINT = 'https://api.ltlab.site'; //Cloudflare tunnel to local API
+//const API_ENDPOINT = 'https://api.ltlab.site'; //Cloudflare tunnel to local API
 
 interface Model {
   id: number;
@@ -62,6 +70,12 @@ interface ModelResult {
   comment: string;
   isSaved: boolean;
   error?: string; // New field to store error messages
+}
+
+// Add this interface for the uploaded file
+interface UploadedFile {
+  file: File;
+  preview: string;
 }
 
 export default function InferencePage() {
@@ -93,6 +107,11 @@ export default function InferencePage() {
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(0);
   const { toast } = useToast();
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [isUploadedToGDrive, setIsUploadedToGDrive] = useState(false);
+
+  // Add this new state to track if inference has been run on the uploaded file
+  const [hasInferenceRunOnUploadedFile, setHasInferenceRunOnUploadedFile] = useState(false);
 
   // Create a function to show toast notifications
   const showToast = (message: string, type: "default" | "success" | "error" = "default") => {
@@ -210,7 +229,7 @@ export default function InferencePage() {
   };
 
   const runInference = async () => {
-    if (selectedModels.length === 0 || !selectedImage) {
+    if (selectedModels.length === 0 || (!selectedImage && !uploadedFile)) {
       showToast("Please select at least one model and an image.", "error");
       return;
     }
@@ -221,16 +240,22 @@ export default function InferencePage() {
     setHasInferenceRun(false);
 
     try {
+      const formData = new FormData();
+      
+      if (uploadedFile) {
+        formData.append('image', uploadedFile.file);
+      } else if (selectedImage) {
+        formData.append('image_url', selectedImage.gdrive_url);
+      } else {
+        throw new Error('No image selected');
+      }
+
+      formData.append('model_names', JSON.stringify(selectedModels));
+      formData.append('confidenceThreshold', (confidenceThreshold / 100).toString());
+
       const response = await fetch(`${API_ENDPOINT}/run_inference`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model_names: selectedModels,
-          imageUrl: selectedImage.gdrive_url,
-          confidenceThreshold: confidenceThreshold / 100, // Convert to 0-1 range
-        }),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -255,6 +280,9 @@ export default function InferencePage() {
       }
       
       setHasInferenceRun(true);
+      if (uploadedFile) {
+        setHasInferenceRunOnUploadedFile(true);
+      }
       setIsCurrentResultSaved(false);
 
       // Show a summary of the inference results
@@ -279,11 +307,19 @@ export default function InferencePage() {
 
   const proceedWithImageSelection = (image: Image) => {
     setSelectedImage(image);
+    setUploadedFile(null); // Clear the uploaded file when selecting a server-side image
     setProcessedImage(null);
     setInferenceResult(null);
-    setInferenceResults([]); // Clear inference results
+    setInferenceResults([]);
     setHasInferenceRun(false);
-    setIsCurrentResultSaved(false);  // Reset this when selecting a new image
+    setIsCurrentResultSaved(false);
+    setIsUploadedToGDrive(false); // Reset this state as well
+  };
+
+  const handleClearUploadedFile = () => {
+    setUploadedFile(null);
+    setIsUploadedToGDrive(false);
+    setHasInferenceRunOnUploadedFile(false);
   };
 
   useEffect(() => {
@@ -516,6 +552,52 @@ export default function InferencePage() {
     return inferenceResults.find(result => result.model_name === selectedResultModel);
   };
 
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedFile({
+          file,
+          preview: reader.result as string
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  }, []);
+
+  // Modify the handleUploadToGDrive function to handle both local and server-side images
+  const handleUploadToGDrive = async () => {
+    if (!uploadedFile) {
+      showToast("No file selected for upload", "error");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadedFile.file);
+
+      const response = await fetch(`${API_ENDPOINT}/upload-and-save-image`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+      showToast("File uploaded to Google Drive successfully!", "success");
+      
+      console.log("Upload result:", result);
+      setIsUploadedToGDrive(true);
+      // You might want to update the selectedImage state here with the new GDrive image data
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast('Error occurred during upload.', "error");
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50 text-gray-800">
       {/* Header */}
@@ -604,6 +686,64 @@ export default function InferencePage() {
               View all
             </Button>
 
+            {/* Photo Upload Section */}
+            <h3 className="text-lg font-semibold mt-6 mb-2">Local Photo to select</h3>
+            <div className="mb-4">
+              <div className="flex items-center justify-between w-full space-x-2">
+                <label
+                  htmlFor="photo-upload"
+                  className="flex-1 flex items-center justify-center h-10 px-2 border border-gray-300 rounded-lg cursor-pointer bg-white hover:bg-gray-50 overflow-hidden"
+                >
+                  <svg className="w-5 h-5 mr-2 text-gray-500 flex-shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                  </svg>
+                  <span className="text-sm text-gray-600 truncate">
+                    {uploadedFile ? uploadedFile.file.name : "Choose file"}
+                  </span>
+                  <Input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+                {uploadedFile && (
+                  <>
+                    <Button 
+                      className="h-10 bg-red-600 hover:bg-red-700 text-white"
+                      onClick={handleClearUploadedFile}
+                    >
+                      X
+                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>  {/* Wrap the button in a span */}
+                            <Button 
+                              className="h-10 bg-green-600 hover:bg-green-700 text-white"
+                              onClick={handleUploadToGDrive}
+                              disabled={!hasInferenceRunOnUploadedFile || isUploadedToGDrive}
+                            >
+                              <Upload className="mr-2 h-4 w-4" /> 
+                              {isUploadedToGDrive ? "Uploaded" : "GDrive"}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {!hasInferenceRunOnUploadedFile 
+                            ? "Run inference before uploading" 
+                            : isUploadedToGDrive 
+                            ? "Image already uploaded" 
+                            : "Upload image to Google Drive"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </>
+                )}
+              </div>
+            </div>
+
             {/* Confidence Threshold */}
             <h3 className="text-lg font-semibold mb-2">Confidence Threshold</h3>
             <Slider
@@ -632,33 +772,33 @@ export default function InferencePage() {
             <h2 className="text-xl font-bold mb-4">
               {inferenceResults.length > 0 ? "Model Result Images" : "Selected Image"}
             </h2>
-            {inferenceResults.length > 0 ? (
-              <Tabs 
-                value={selectedResultModel || inferenceResults[0]?.model_name}
-                className="w-full"
-                onValueChange={handleModelResultSelection}
-              >
-                <TabsList className="flex flex-wrap mb-6">
-                  {inferenceResults.map((result, index) => (
-                    <TabsTrigger 
-                      key={index} 
-                      value={result.model_name}
-                      className="flex-grow basis-1/2 lg:basis-1/4 max-w-[50%] lg:max-w-[25%]"
-                    >
-                      {result.model_name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                <div className="mt-4">
-                  {inferenceResults.map((result, index) => (
-                    <TabsContent key={index} value={result.model_name}>
-                      <Card className="w-full">
-                        <CardHeader>
-                          <CardTitle className="text-lg font-bold text-center">
-                            {selectedImage ? selectedImage.file_name : 'No image selected'}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex flex-col items-center">
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-center">
+                  {uploadedFile ? uploadedFile.file.name : (selectedImage ? selectedImage.file_name : 'No image selected')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center">
+                {inferenceResults.length > 0 ? (
+                  <Tabs 
+                    value={selectedResultModel || inferenceResults[0]?.model_name}
+                    className="w-full"
+                    onValueChange={handleModelResultSelection}
+                  >
+                    <TabsList className="flex flex-wrap mb-6">
+                      {inferenceResults.map((result, index) => (
+                        <TabsTrigger 
+                          key={index} 
+                          value={result.model_name}
+                          className="flex-grow basis-1/2 lg:basis-1/4 max-w-[50%] lg:max-w-[25%]"
+                        >
+                          {result.model_name}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    <div className="mt-4">
+                      {inferenceResults.map((result, index) => (
+                        <TabsContent key={index} value={result.model_name}>
                           {result.error ? (
                             <div className="w-full h-[50vh] bg-red-100 flex items-center justify-center text-red-500">
                               Error: {result.error}
@@ -671,44 +811,34 @@ export default function InferencePage() {
                             />
                           )}
                           <p className="text-sm text-gray-600 text-center">
-                            {selectedImage ? (selectedImage.description || "No description") : ''}
-                          </p>
-                        </CardContent>
-                        <CardFooter>
-                          <p className="text-sm text-gray-600 w-full text-center">
                             {result.error ? 'Inference failed for this model' : formatInferenceResult(result.detections)}
                           </p>
-                        </CardFooter>
-                      </Card>
-                    </TabsContent>
-                  ))}
-                </div>
-              </Tabs>
-            ) : (
-              <Card className="w-full">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-center">
-                    {selectedImage ? selectedImage.file_name : 'No image selected'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col items-center">
-                  {selectedImage ? (
-                    <img
-                      src={selectedImage.gdrive_url}
-                      alt={selectedImage.file_name}
-                      className="max-w-full max-h-[50vh] object-contain mb-4"
-                    />
-                  ) : (
-                    <div className="w-full h-[50vh] bg-gray-200 flex items-center justify-center text-gray-500">
-                      No image selected
+                        </TabsContent>
+                      ))}
                     </div>
-                  )}
-                  <p className="text-sm text-gray-600 text-center">
-                    {selectedImage ? (selectedImage.description || "No description") : ''}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+                  </Tabs>
+                ) : uploadedFile ? (
+                  <img
+                    src={uploadedFile.preview}
+                    alt="Uploaded image"
+                    className="max-w-full max-h-[50vh] object-contain mb-4"
+                  />
+                ) : selectedImage ? (
+                  <img
+                    src={selectedImage.gdrive_url}
+                    alt={selectedImage.file_name}
+                    className="max-w-full max-h-[50vh] object-contain mb-4"
+                  />
+                ) : (
+                  <div className="w-full h-[50vh] bg-gray-200 flex items-center justify-center text-gray-500">
+                    No image selected
+                  </div>
+                )}
+                <p className="text-sm text-gray-600 text-center mt-4">
+                  {selectedImage ? (selectedImage.description || "No description") : ''}
+                </p>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Right Column */}
@@ -768,17 +898,35 @@ export default function InferencePage() {
               </div>
             )}
 
-            <div className="flex space-x-2 mt-4 mb-4 lg:mb-0">
-              <Button 
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" 
-                onClick={handleSaveResult} 
-                disabled={!hasInferenceRun || !selectedResultModel || getCurrentModelResult()?.isSaved}
-              >
-                {getCurrentModelResult()?.isSaved 
-                  ? `${selectedResultModel} Result Saved` 
-                  : `Save ${selectedResultModel} Result`}
-              </Button>
-            </div>
+            {/* Save Result Button */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex space-x-2 mt-4 mb-4 lg:mb-0">
+                    <Button 
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" 
+                      onClick={handleSaveResult} 
+                      disabled={!hasInferenceRun || !selectedResultModel || !!getCurrentModelResult()?.isSaved || (!!uploadedFile && !isUploadedToGDrive)}
+                    >
+                      {getCurrentModelResult()?.isSaved 
+                        ? `${selectedResultModel} Result Saved` 
+                        : `Save ${selectedResultModel} Result`}
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {uploadedFile && !isUploadedToGDrive
+                    ? "Please upload the image to Google Drive before saving the result"
+                    : !hasInferenceRun
+                    ? "Run inference to save results"
+                    : !selectedResultModel
+                    ? "Select a model result to save"
+                    : getCurrentModelResult()?.isSaved
+                    ? "This result has already been saved"
+                    : ""}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </main>
       </div>
